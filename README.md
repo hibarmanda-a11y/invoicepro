@@ -1,4 +1,17 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+## Environment
+
+Add these values to `.env.local` before using authentication:
+
+```env
+AUTH_SECRET=replace-with-a-long-random-value
+MONGODB_URI=your-mongodb-connection-string
+MONGODB_DATABASE=your-database-name
+AUTH_GOOGLE_ID=optional-google-client-id
+AUTH_GOOGLE_SECRET=optional-google-client-secret
+ADMIN_EMAIL=optional-first-admin-email
+```
+
+Accounts are `user` by default. Set `ADMIN_EMAIL` before creating the first account to bootstrap an admin, then promote trusted accounts from the Admin Users panel or directly in the `users` collection.
 
 ## Getting Started
 

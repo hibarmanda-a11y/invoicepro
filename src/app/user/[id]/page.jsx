@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function EditorPage() {
   const { id } = useParams();
   const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
 
   const [template, setTemplate] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -458,6 +460,11 @@ export default function EditorPage() {
   ============================================================ */
 
   async function handleDownloadPDF() {
+    if (sessionStatus === "loading") return;
+    if (!session) {
+      router.push("/login");
+      return;
+    }
     setDownloading(true);
 
     try {
@@ -516,6 +523,11 @@ export default function EditorPage() {
           "invoice"
         }.pdf`
       );
+      fetch("/api/downloads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId: id, invoiceNumber: formData.invoiceNumber }),
+      }).catch(() => {});
     } catch (err) {
       console.error(
         "PDF generation failed:",
@@ -1281,12 +1293,14 @@ export default function EditorPage() {
             <button
               type="button"
               onClick={handleDownloadPDF}
-              disabled={downloading}
+              disabled={downloading || sessionStatus === "loading"}
               className="mt-5 w-full rounded-xl bg-[#111] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.1)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-black/85 hover:shadow-[0_12px_28px_rgba(0,0,0,0.14)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {downloading
                 ? "Generating PDF..."
-                : "Download PDF"}
+                : session
+                  ? "Download PDF"
+                  : "Log in to download"}
             </button>
 
           </section>

@@ -229,6 +229,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { signOut } from "next-auth/react";
 
 export default function AdminPage() {
   const [name, setName] = useState("");
@@ -241,33 +242,57 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [message, setMessage] = useState("");
+  const [stats, setStats] = useState({ templates: 0, users: 0, downloads: 0 });
+  const [users, setUsers] = useState([]);
 
   async function loadTemplates() {
     const res = await fetch("/api/templates");
+    if (!res.ok) throw new Error("Unable to load templates");
     const data = await res.json();
     setTemplates(data);
+    setStats((current) => ({ ...current, templates: data.length }));
   }
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/templates")
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled) {
-          setTemplates(data);
-        }
+    Promise.all([fetch("/api/templates"), fetch("/api/admin/stats"), fetch("/api/admin/users")])
+      .then(async ([templatesRes, statsRes, usersRes]) => {
+        if (!templatesRes.ok || !statsRes.ok || !usersRes.ok) throw new Error("Admin data request failed");
+        const [templateData, statsData, usersData] = await Promise.all([
+          templatesRes.json(),
+          statsRes.json(),
+          usersRes.json(),
+        ]);
+        if (cancelled) return;
+        setTemplates(Array.isArray(templateData) ? templateData : []);
+        setStats({ ...statsData, templates: Array.isArray(templateData) ? templateData.length : 0, users: usersData.total ?? usersData.users?.length ?? 0 });
+        setUsers(usersData.users || []);
       })
       .catch(() => {
         if (!cancelled) {
           setTemplates([]);
+          setUsers([]);
+          setMessage("Unable to load admin data. Please refresh and try again.");
         }
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
+
+  async function deleteTemplate(id) {
+    if (!window.confirm("Delete this template permanently?")) return;
+    const response = await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    if (response.ok) {
+      setTemplates((current) => current.filter((template) => template._id !== id));
+      setStats((current) => ({ ...current, templates: Math.max(0, current.templates - 1) }));
+    }
+  }
+
+  async function makeAdmin(id) {
+    const response = await fetch("/api/admin/users", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, role: "admin" }) });
+    if (response.ok) setUsers((current) => current.map((user) => user._id === id ? { ...user, role: "admin" } : user));
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -356,10 +381,21 @@ export default function AdminPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 border-y border-[#e8e8e3] py-3">
+          <a href="#upload" className="rounded-lg bg-[#222220] px-3 py-2 text-xs font-semibold text-white">Add Templates</a>
+          <a href="#library" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#777771] hover:bg-white">All templates</a>
+          <a href="#users" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#777771] hover:bg-white">Users</a>
+          <button onClick={() => signOut({ callbackUrl: "/" })} className="ml-auto rounded-lg px-3 py-2 text-xs font-semibold text-[#9a625c] hover:bg-white">Log out</button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[['Templates', stats.templates], ['Users', stats.users], ['Total downloads', stats.downloads], ['Role', 'Admin']].map(([label, value]) => <div key={label} className="rounded-2xl border border-[#e8e8e3] bg-white p-4"><p className="text-[10px] uppercase tracking-[0.12em] text-[#a0a09a]">{label}</p><p className="mt-2 text-2xl font-semibold text-[#292927]">{value}</p></div>)}
+        </div>
+
         {/* =========================
             UPLOAD FORM
         ========================== */}
-        <form
+        <form id="upload"
           onSubmit={handleSubmit}
           className="rounded-2xl border border-[#e9e9e5] bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:p-7 lg:p-8"
         >
@@ -582,7 +618,7 @@ export default function AdminPage() {
         {/* =========================
             EXISTING TEMPLATES
         ========================== */}
-        <section className="pb-10">
+        <section id="library" className="pb-10">
           <div className="mb-5 flex items-end justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#a0a09a]">
@@ -645,6 +681,7 @@ export default function AdminPage() {
                       />
                     </svg>
                   </div>
+                  <button onClick={() => deleteTemplate(t._id)} className="mx-4 mb-4 text-xs font-semibold text-[#9a625c] hover:underline">Delete template</button>
                 </div>
               </div>
             ))}
@@ -681,6 +718,15 @@ export default function AdminPage() {
                 </p>
               </div>
             )}
+          </div>
+        </section>
+
+        <section id="users" className="pb-12">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#a0a09a]">People</p>
+          <h2 className="mt-1 text-xl font-semibold text-[#292927]">Users</h2>
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-[#e8e8e3] bg-white">
+            {users.map((user) => <div key={user._id} className="flex min-w-[32rem] items-center justify-between gap-4 border-b border-[#eeeeea] px-4 py-3 last:border-0"><div><p className="text-sm font-semibold text-[#343431]">{user.name}</p><p className="text-xs text-[#8c8c87]">{user.email}</p></div><span className="text-xs text-[#777771]">{user.role}</span>{user.role === "user" && <button onClick={() => makeAdmin(user._id)} className="text-xs font-semibold text-[#343431] underline">Make admin</button>}</div>)}
+            {!users.length && <p className="p-5 text-sm text-[#8c8c87]">No users found.</p>}
           </div>
         </section>
       </div>

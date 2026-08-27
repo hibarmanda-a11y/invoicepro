@@ -62,11 +62,12 @@ export default function UserPage() {
             <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
               
               {/* Image Wrapper - Aspect Ratio 3:4 is ideal for Invoices */}
-              <div className="aspect-[3/4] w-full bg-gray-100 overflow-hidden">
+              <div className="relative aspect-[3/4] w-full bg-gray-100 overflow-hidden">
                 <Image
                   src={t.thumbnailUrl}
                   alt={t.name}
                   fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -77,11 +78,11 @@ export default function UserPage() {
                   <h3 className="text-xl font-bold text-gray-800 truncate leading-tight">
                     {t.name}
                   </h3>
-                  <span className="text-sm font-medium text-blue-600">Use Template</span>
+                  <span className="text-sm font-medium text-black">Use Template</span>
                 </div>
                 
                 {/* Visual indicator (Arrow) */}
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-amber-200">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>

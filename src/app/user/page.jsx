@@ -62,11 +62,12 @@ export default function UserPage() {
             <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
               
               {/* Image Wrapper - Aspect Ratio 3:4 is ideal for Invoices */}
-              <div className="aspect-[3/4] w-full bg-gray-100 overflow-hidden">
+              <div className="relative aspect-[3/4] w-full bg-gray-100 overflow-hidden">
                 <Image
                   src={t.thumbnailUrl}
                   alt={t.name}
                   fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   className="w-full h-full object-cover"
                 />
               </div>

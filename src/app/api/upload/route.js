@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { uploadBufferToCloudinary } from "@/lib/cloudinary";
+import { auth } from "@/auth";
 
 export async function POST(req) {
   try {
+    const session = await auth();
+    if (session?.user?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const formData = await req.formData();
     const file = formData.get("file");
     const folder = formData.get("folder") || "invoicepro";
