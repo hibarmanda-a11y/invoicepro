@@ -481,40 +481,116 @@ export default function EditorPage() {
       const doc =
         iframeDocRef.current;
 
+      if (!doc?.body) {
+        throw new Error("Invoice preview is not ready");
+      }
+
+      await new Promise((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(resolve)
+        )
+      );
+
+      if (doc.fonts?.ready) {
+        await doc.fonts.ready;
+      }
+
+      await Promise.all(
+        Array.from(doc.images).map((image) =>
+          image.complete
+            ? Promise.resolve()
+            : new Promise((resolve) => {
+                image.addEventListener(
+                  "load",
+                  resolve,
+                  { once: true }
+                );
+                image.addEventListener(
+                  "error",
+                  resolve,
+                  { once: true }
+                );
+              })
+        )
+      );
+
       const target =
         doc.body.firstElementChild ||
         doc.body;
+
+      const targetRect =
+        target.getBoundingClientRect();
+      const targetWidth = Math.ceil(
+        Math.max(
+          targetRect.width,
+          target.scrollWidth,
+          doc.body.scrollWidth
+        )
+      );
+      const targetHeight = Math.ceil(
+        Math.max(
+          targetRect.height,
+          target.scrollHeight,
+          doc.body.scrollHeight
+        )
+      );
+
+      if (targetWidth <= 0 || targetHeight <= 0) {
+        throw new Error("Invoice preview has invalid dimensions");
+      }
 
       const canvas =
         await html2canvas(target, {
           scale: 2,
           useCORS: true,
           backgroundColor: "#ffffff",
+          width: targetWidth,
+          height: targetHeight,
+          windowWidth: Math.max(
+            doc.documentElement.clientWidth,
+            targetWidth
+          ),
+          windowHeight: Math.max(
+            doc.documentElement.clientHeight,
+            targetHeight
+          ),
         });
 
       const imgData =
-        canvas.toDataURL("image/png");
+        canvas.toDataURL("image/jpeg", 0.95);
+
+      const canvasWidth = Number(canvas.width);
+      const canvasHeight = Number(canvas.height);
+      if (!Number.isFinite(canvasWidth) || !Number.isFinite(canvasHeight) || canvasWidth <= 0 || canvasHeight <= 0) {
+        throw new Error("Invoice preview has invalid dimensions");
+      }
+
+      const landscape = canvasWidth > canvasHeight;
+      const pageWidth = landscape ? 297 : 210;
+      const pageHeight = landscape ? 210 : 297;
+      const margin = 10;
+      const imageRatio = canvasWidth / canvasHeight;
+      let imageWidth = pageWidth - margin * 2;
+      let imageHeight = imageWidth / imageRatio;
+
+      if (imageHeight > pageHeight - margin * 2) {
+        imageHeight = pageHeight - margin * 2;
+        imageWidth = imageHeight * imageRatio;
+      }
 
       const pdf = new jsPDF({
-        orientation:
-          canvas.width >
-          canvas.height
-            ? "landscape"
-            : "portrait",
-        unit: "px",
-        format: [
-          canvas.width,
-          canvas.height,
-        ],
+        orientation: landscape ? "landscape" : "portrait",
+        unit: "mm",
+        format: "a4",
       });
 
       pdf.addImage(
         imgData,
-        "PNG",
-        0,
-        0,
-        canvas.width,
-        canvas.height
+        "JPEG",
+        (pageWidth - imageWidth) / 2,
+        (pageHeight - imageHeight) / 2,
+        imageWidth,
+        imageHeight
       );
 
       pdf.save(

@@ -27,10 +27,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       if (account?.provider === "google") {
         await connectDB();
-        const existing = await User.findOne({ email: user.email.toLowerCase() });
-        if (!existing) await User.create({ name: user.name || "Invoice Pro user", email: user.email.toLowerCase(), role: "user" });
+        let existing = await User.findOne({ email: user.email.toLowerCase() });
+        if (!existing) {
+          existing = await User.create({ name: user.name || "Invoice Pro user", email: user.email.toLowerCase(), role: "user" });
+        }
         user.role = existing?.role || "user";
-        user.id = existing?._id.toString() || user.id;
+        user.id = existing?._id?.toString() || user.id;
       }
       return true;
     },
@@ -38,6 +40,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = user.role || "user";
+      }
+      if (token?.email && (!token.id || !/^[0-9a-fA-F]{24}$/.test(token.id))) {
+        await connectDB();
+        const dbUser = await User.findOne({ email: token.email.toLowerCase() });
+        if (dbUser) {
+          token.id = dbUser._id.toString();
+          token.role = dbUser.role || "user";
+        }
       }
       return token;
     },
