@@ -514,24 +514,24 @@ export default function EditorPage() {
         )
       );
 
-      const target =
-        doc.body.firstElementChild ||
-        doc.body;
+      const target = doc.body;
 
-      const targetRect =
-        target.getBoundingClientRect();
       const targetWidth = Math.ceil(
         Math.max(
-          targetRect.width,
           target.scrollWidth,
-          doc.body.scrollWidth
+          target.offsetWidth,
+          doc.documentElement.scrollWidth,
+          doc.documentElement.offsetWidth,
+          800
         )
       );
       const targetHeight = Math.ceil(
         Math.max(
-          targetRect.height,
           target.scrollHeight,
-          doc.body.scrollHeight
+          target.offsetHeight,
+          doc.documentElement.scrollHeight,
+          doc.documentElement.offsetHeight,
+          1000
         )
       );
 
@@ -539,25 +539,24 @@ export default function EditorPage() {
         throw new Error("Invoice preview has invalid dimensions");
       }
 
-      const canvas =
-        await html2canvas(target, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          width: targetWidth,
-          height: targetHeight,
-          windowWidth: Math.max(
-            doc.documentElement.clientWidth,
-            targetWidth
-          ),
-          windowHeight: Math.max(
-            doc.documentElement.clientHeight,
-            targetHeight
-          ),
-        });
+      const canvas = await html2canvas(target, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
+        width: targetWidth,
+        height: targetHeight,
+        windowWidth: targetWidth,
+        windowHeight: targetHeight,
+        window: iframeRef.current?.contentWindow || window,
+        document: doc,
+      });
 
-      const imgData =
-        canvas.toDataURL("image/jpeg", 0.95);
+      const imgData = canvas.toDataURL("image/png");
 
       const canvasWidth = Number(canvas.width);
       const canvasHeight = Number(canvas.height);
@@ -586,7 +585,7 @@ export default function EditorPage() {
 
       pdf.addImage(
         imgData,
-        "JPEG",
+        "PNG",
         (pageWidth - imageWidth) / 2,
         (pageHeight - imageHeight) / 2,
         imageWidth,
@@ -594,9 +593,7 @@ export default function EditorPage() {
       );
 
       pdf.save(
-        `${formData.invoiceNumber ||
-        "invoice"
-        }.pdf`
+        `${formData.invoiceNumber || "invoice"}.pdf`
       );
       fetch("/api/downloads", {
         method: "POST",
