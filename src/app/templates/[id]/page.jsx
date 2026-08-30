@@ -14,14 +14,42 @@ import {
   Receipt,
   Percent,
   ImageIcon,
-  Sparkles,
   RefreshCw,
   Eye,
   Edit3,
   CheckCircle2,
+  AlertCircle,
   X,
-  FileText
+  RotateCcw,
+  Sparkles,
+  Coins,
+  Check,
+  AlertTriangle
 } from "lucide-react";
+
+const CURRENCIES = [
+  { code: "USD", symbol: "$", label: "USD ($)" },
+  { code: "EUR", symbol: "€", label: "EUR (€)" },
+  { code: "GBP", symbol: "£", label: "GBP (£)" },
+  { code: "INR", symbol: "₹", label: "INR (₹)" },
+  { code: "BDT", symbol: "৳", label: "BDT (৳)" },
+  { code: "JPY", symbol: "¥", label: "JPY (¥)" },
+];
+
+const SAMPLE_INVOICE_DATA = {
+  companyName: "Nexus Digital Agency LLC",
+  from: "Nexus Digital Agency\n742 Evergreen Terrace, Suite 300\ncontact@nexusagency.io\n+1 (555) 234-5678",
+  billTo: "Acme Global Technologies Inc.\nAttn: Accounts Payable\n100 Enterprise Way, Floor 12\nbilling@acmeglobal.com",
+  items: [
+    { id: 1, description: "Brand Identity Design & Visual Guidelines", qty: 1, price: 1800 },
+    { id: 2, description: "Frontend Next.js Application Development", qty: 40, price: 95 },
+    { id: 3, description: "Cloud Infrastructure & CDN Setup", qty: 1, price: 650 },
+  ],
+  taxEnabled: true,
+  taxPercent: 10,
+  discountEnabled: true,
+  discountPercent: 5,
+};
 
 export default function EditorPage() {
   const { id } = useParams();
@@ -33,9 +61,25 @@ export default function EditorPage() {
   const [downloading, setDownloading] = useState(false);
   const [mobileTab, setMobileTab] = useState("edit"); // "edit" or "preview"
 
+  // Toast / Notification state
+  const [toast, setToast] = useState({ show: false, type: "success", title: "", message: "" });
+  
+  // In-app Confirmation Modal state
+  const [confirmModal, setConfirmModal] = useState({
+    show: false,
+    title: "",
+    message: "",
+    confirmLabel: "",
+    isDestructive: false,
+    onConfirm: null,
+  });
+
   const iframeRef = useRef(null);
   const iframeDocRef = useRef(null);
   const itemRowTemplateRef = useRef(null);
+
+  // Currency
+  const [selectedCurrency, setSelectedCurrency] = useState(CURRENCIES[0]);
 
   const [formData, setFormData] = useState({
     companyName: "",
@@ -67,6 +111,132 @@ export default function EditorPage() {
     signature: false,
   });
 
+  const triggerToast = useCallback((type, title, message) => {
+    setToast({ show: true, type, title, message });
+    setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+    }, 4500);
+  }, []);
+
+  /* ============================================================
+     DRAFT PERSISTENCE (localStorage)
+  ============================================================ */
+
+  const draftKey = `invoicepro_draft_${id}`;
+
+  const saveDraft = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const draftPayload = {
+        formData,
+        items,
+        taxEnabled,
+        taxPercent,
+        discountEnabled,
+        discountPercent,
+        selectedCurrency,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(draftKey, JSON.stringify(draftPayload));
+    } catch {
+      // Ignore quota errors
+    }
+  }, [formData, items, taxEnabled, taxPercent, discountEnabled, discountPercent, selectedCurrency, draftKey]);
+
+  // Auto-save draft on state change (debounced via effect)
+  useEffect(() => {
+    if (!loading && template) {
+      const timer = setTimeout(() => {
+        saveDraft();
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, template, saveDraft]);
+
+  const restoreDraft = useCallback((savedDraft) => {
+    if (!savedDraft) return false;
+    try {
+      if (savedDraft.formData) setFormData((prev) => ({ ...prev, ...savedDraft.formData }));
+      if (Array.isArray(savedDraft.items) && savedDraft.items.length > 0) setItems(savedDraft.items);
+      if (typeof savedDraft.taxEnabled === "boolean") setTaxEnabled(savedDraft.taxEnabled);
+      if (typeof savedDraft.taxPercent === "number") setTaxPercent(savedDraft.taxPercent);
+      if (typeof savedDraft.discountEnabled === "boolean") setDiscountEnabled(savedDraft.discountEnabled);
+      if (typeof savedDraft.discountPercent === "number") setDiscountPercent(savedDraft.discountPercent);
+      if (savedDraft.selectedCurrency) setSelectedCurrency(savedDraft.selectedCurrency);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const handleClearDraft = () => {
+    setConfirmModal({
+      show: true,
+      title: "Clear Invoice Draft?",
+      message: "This will reset all invoice fields, items, and uploaded assets to a clean blank state. This action cannot be undone.",
+      confirmLabel: "Clear Draft",
+      isDestructive: true,
+      onConfirm: async () => {
+        localStorage.removeItem(draftKey);
+        setFormData({
+          companyName: "",
+          from: "",
+          billTo: "",
+          invoiceNumber: "",
+          date: new Date().toISOString().slice(0, 10),
+          logoUrl: "",
+          signatureUrl: "",
+        });
+        setItems([{ id: Date.now(), description: "", qty: 1, price: 0 }]);
+        setTaxEnabled(false);
+        setTaxPercent(10);
+        setDiscountEnabled(false);
+        setDiscountPercent(5);
+        setSelectedCurrency(CURRENCIES[0]);
+        await fetchInvoiceNumber();
+        setConfirmModal((prev) => ({ ...prev, show: false }));
+        triggerToast("info", "Draft Cleared", "The invoice workspace has been reset.");
+      },
+    });
+  };
+
+  /* ============================================================
+     POPULATE SAMPLE INVOICE DATA
+  ============================================================ */
+
+  const handleUseSampleData = () => {
+    const isDirty = formData.companyName || formData.from || formData.billTo || items[0]?.description;
+    
+    const applySample = () => {
+      setFormData((prev) => ({
+        ...prev,
+        companyName: SAMPLE_INVOICE_DATA.companyName,
+        from: SAMPLE_INVOICE_DATA.from,
+        billTo: SAMPLE_INVOICE_DATA.billTo,
+      }));
+      setItems(SAMPLE_INVOICE_DATA.items.map((i) => ({ ...i, id: Date.now() + Math.random() })));
+      setTaxEnabled(SAMPLE_INVOICE_DATA.taxEnabled);
+      setTaxPercent(SAMPLE_INVOICE_DATA.taxPercent);
+      setDiscountEnabled(SAMPLE_INVOICE_DATA.discountEnabled);
+      setDiscountPercent(SAMPLE_INVOICE_DATA.discountPercent);
+      setConfirmModal((prev) => ({ ...prev, show: false }));
+      triggerToast("success", "Sample Invoice Loaded", "Realistic client deliverables and tax data populated.");
+    };
+
+    if (isDirty) {
+      setConfirmModal({
+        show: true,
+        title: "Populate Sample Data?",
+        message: "This will replace your current invoice fields with demonstration data. Any unsaved custom text will be overwritten.",
+        confirmLabel: "Load Sample Data",
+        isDestructive: false,
+        onConfirm: applySample,
+      });
+    } else {
+      applySample();
+    }
+  };
+
   /* ============================================================
      LOAD TEMPLATE + AUTO INVOICE NUMBER
   ============================================================ */
@@ -96,7 +266,24 @@ export default function EditorPage() {
         setTaxEnabled(!!data.defaultTaxEnabled);
         setDiscountEnabled(!!data.defaultDiscountEnabled);
 
-        await fetchInvoiceNumber();
+        // Check for local draft
+        let hasRestoredDraft = false;
+        if (typeof window !== "undefined") {
+          try {
+            const rawDraft = localStorage.getItem(draftKey);
+            if (rawDraft) {
+              const parsed = JSON.parse(rawDraft);
+              hasRestoredDraft = restoreDraft(parsed);
+            }
+          } catch {
+            // Ignore
+          }
+        }
+
+        if (!hasRestoredDraft) {
+          await fetchInvoiceNumber();
+        }
+
         setLoading(false);
       } catch (error) {
         console.error("Failed to load template:", error);
@@ -105,7 +292,7 @@ export default function EditorPage() {
     }
 
     load();
-  }, [id, fetchInvoiceNumber]);
+  }, [id, draftKey, restoreDraft, fetchInvoiceNumber]);
 
   /* ============================================================
      PREPARE IFRAME
@@ -155,8 +342,10 @@ export default function EditorPage() {
   }
 
   /* ============================================================
-     LIVE PREVIEW
+     LIVE PREVIEW SYNCHRONIZATION
   ============================================================ */
+
+  const currencySymbol = selectedCurrency.symbol;
 
   const updatePreview = useCallback(() => {
     const doc = iframeDocRef.current;
@@ -167,6 +356,7 @@ export default function EditorPage() {
     setText(doc, "bill-to", formData.billTo || "Client details & address");
     setText(doc, "invoice-number", formData.invoiceNumber || "INV-0001");
     setText(doc, "invoice-date", formData.date);
+    setText(doc, "currency", currencySymbol);
 
     setImage(doc, "logo", formData.logoUrl);
     setImage(doc, "signature", formData.signatureUrl);
@@ -178,7 +368,9 @@ export default function EditorPage() {
 
       items.forEach((item) => {
         const row = itemRowTemplateRef.current.cloneNode(true);
-        const total = (Number(item.qty) || 0) * (Number(item.price) || 0);
+        const validQty = Math.max(1, Number(item.qty) || 1);
+        const validPrice = Math.max(0, Number(item.price) || 0);
+        const total = validQty * validPrice;
 
         const descEl = row.querySelector('[data-field="item-desc"]');
         const qtyEl = row.querySelector('[data-field="item-qty"]');
@@ -186,43 +378,48 @@ export default function EditorPage() {
         const totalEl = row.querySelector('[data-field="item-total"]');
 
         if (descEl) descEl.textContent = item.description || "Item description";
-        if (qtyEl) qtyEl.textContent = item.qty ?? 1;
-        if (priceEl) priceEl.textContent = Number(item.price || 0).toFixed(2);
-        if (totalEl) totalEl.textContent = total.toFixed(2);
+        if (qtyEl) qtyEl.textContent = validQty;
+        if (priceEl) priceEl.textContent = `${currencySymbol}${validPrice.toFixed(2)}`;
+        if (totalEl) totalEl.textContent = `${currencySymbol}${total.toFixed(2)}`;
 
         tbody.appendChild(row);
       });
     }
 
-    // Calculations
-    const subtotal = items.reduce(
-      (sum, item) => sum + (Number(item.qty) || 0) * (Number(item.price) || 0),
-      0
-    );
-    const taxAmount = taxEnabled ? subtotal * (Number(taxPercent || 0) / 100) : 0;
-    const discountAmount = discountEnabled ? subtotal * (Number(discountPercent || 0) / 100) : 0;
-    const grandTotal = subtotal + taxAmount - discountAmount;
+    // Validated Calculations
+    const subtotal = items.reduce((sum, item) => {
+      const q = Math.max(1, Number(item.qty) || 1);
+      const p = Math.max(0, Number(item.price) || 0);
+      return sum + q * p;
+    }, 0);
 
-    setText(doc, "subtotal", subtotal.toFixed(2));
-    setText(doc, "tax-percent", taxPercent || 0);
-    setText(doc, "tax-amount", taxAmount.toFixed(2));
-    setText(doc, "discount-percent", discountPercent || 0);
-    setText(doc, "discount-amount", discountAmount.toFixed(2));
-    setText(doc, "grand-total", grandTotal.toFixed(2));
+    const safeTaxPercent = Math.min(100, Math.max(0, Number(taxPercent) || 0));
+    const safeDiscountPercent = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+
+    const taxAmount = taxEnabled ? subtotal * (safeTaxPercent / 100) : 0;
+    const discountAmount = discountEnabled ? subtotal * (safeDiscountPercent / 100) : 0;
+    const grandTotal = Math.max(0, subtotal + taxAmount - discountAmount);
+
+    setText(doc, "subtotal", `${currencySymbol}${subtotal.toFixed(2)}`);
+    setText(doc, "tax-percent", `${safeTaxPercent}%`);
+    setText(doc, "tax-amount", `${currencySymbol}${taxAmount.toFixed(2)}`);
+    setText(doc, "discount-percent", `${safeDiscountPercent}%`);
+    setText(doc, "discount-amount", `-${currencySymbol}${discountAmount.toFixed(2)}`);
+    setText(doc, "grand-total", `${currencySymbol}${grandTotal.toFixed(2)}`);
 
     const taxRow = doc.querySelector('[data-field="tax-row"]');
     if (taxRow) taxRow.style.display = taxEnabled ? "" : "none";
 
     const discountRow = doc.querySelector('[data-field="discount-row"]');
     if (discountRow) discountRow.style.display = discountEnabled ? "" : "none";
-  }, [formData, items, taxEnabled, taxPercent, discountEnabled, discountPercent]);
+  }, [formData, items, taxEnabled, taxPercent, discountEnabled, discountPercent, currencySymbol]);
 
   useEffect(() => {
     updatePreview();
   }, [updatePreview]);
 
   /* ============================================================
-     ITEM HANDLERS
+     VALIDATED ITEM HANDLERS
   ============================================================ */
 
   function addItem() {
@@ -238,13 +435,25 @@ export default function EditorPage() {
   }
 
   function removeItem(itemId) {
-    if (items.length <= 1) return;
+    if (items.length <= 1) {
+      triggerToast("warning", "Item Required", "An invoice must have at least one line item.");
+      return;
+    }
     setItems((prev) => prev.filter((item) => item.id !== itemId));
   }
 
   function updateItem(itemId, field, value) {
+    let sanitizedValue = value;
+    if (field === "qty") {
+      const num = parseInt(value, 10);
+      sanitizedValue = isNaN(num) || num < 1 ? 1 : Math.min(99999, num);
+    } else if (field === "price") {
+      const num = parseFloat(value);
+      sanitizedValue = isNaN(num) || num < 0 ? 0 : Math.min(99999999, num);
+    }
+
     setItems((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, [field]: value } : item))
+      prev.map((item) => (item.id === itemId ? { ...item, [field]: sanitizedValue } : item))
     );
   }
 
@@ -255,6 +464,18 @@ export default function EditorPage() {
   async function handleFileUpload(e, field) {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Client-side file size check (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast("error", "File Too Large", "Maximum image upload size is 5MB.");
+      return;
+    }
+
+    // Client-side MIME check
+    if (!file.type.startsWith("image/")) {
+      triggerToast("error", "Invalid File", "Please choose a valid image file (PNG, JPG, WEBP, SVG).");
+      return;
+    }
 
     setUploading((prev) => ({ ...prev, [field]: true }));
     const fd = new FormData();
@@ -272,9 +493,12 @@ export default function EditorPage() {
           ...prev,
           [field === "logo" ? "logoUrl" : "signatureUrl"]: data.url,
         }));
+        triggerToast("success", "Asset Uploaded", `${field === "logo" ? "Logo" : "Signature"} added to invoice.`);
+      } else {
+        triggerToast("error", "Upload Failed", data.error || "Could not upload image.");
       }
-    } catch (error) {
-      console.error(`${field} upload failed:`, error);
+    } catch {
+      triggerToast("error", "Upload Error", "Network error while uploading asset.");
     } finally {
       setUploading((prev) => ({ ...prev, [field]: false }));
     }
@@ -285,10 +509,11 @@ export default function EditorPage() {
       ...prev,
       [field === "logo" ? "logoUrl" : "signatureUrl"]: "",
     }));
+    triggerToast("info", "Asset Removed", `${field === "logo" ? "Logo" : "Signature"} removed.`);
   }
 
   /* ============================================================
-     PDF DOWNLOAD
+     RESILIENT PDF DOWNLOAD
   ============================================================ */
 
   async function handleDownloadPDF() {
@@ -305,7 +530,7 @@ export default function EditorPage() {
       const doc = iframeDocRef.current;
 
       if (!doc?.body) {
-        throw new Error("Invoice preview is not ready");
+        throw new Error("Invoice preview is not initialized yet.");
       }
 
       await new Promise((resolve) =>
@@ -316,16 +541,16 @@ export default function EditorPage() {
         await doc.fonts.ready;
       }
 
-      await Promise.all(
-        Array.from(doc.images).map((image) =>
-          image.complete
-            ? Promise.resolve()
-            : new Promise((resolve) => {
-              image.addEventListener("load", resolve, { once: true });
-              image.addEventListener("error", resolve, { once: true });
-            })
-        )
-      );
+      // Safe image preloader with Promise.allSettled and 3s timeout
+      const imagePromises = Array.from(doc.images).map((image) => {
+        if (image.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          const timeout = setTimeout(resolve, 3000);
+          image.addEventListener("load", () => { clearTimeout(timeout); resolve(); }, { once: true });
+          image.addEventListener("error", () => { clearTimeout(timeout); resolve(); }, { once: true });
+        });
+      });
+      await Promise.allSettled(imagePromises);
 
       const target = doc.body;
       const targetWidth = Math.ceil(
@@ -368,6 +593,10 @@ export default function EditorPage() {
       const canvasWidth = Number(canvas.width);
       const canvasHeight = Number(canvas.height);
 
+      if (!Number.isFinite(canvasWidth) || !Number.isFinite(canvasHeight) || canvasWidth <= 0 || canvasHeight <= 0) {
+        throw new Error("Invalid canvas rendering dimensions.");
+      }
+
       const landscape = canvasWidth > canvasHeight;
       const pageWidth = landscape ? 297 : 210;
       const pageHeight = landscape ? 210 : 297;
@@ -396,32 +625,41 @@ export default function EditorPage() {
         imageHeight
       );
 
-      pdf.save(`${formData.invoiceNumber || "invoice"}.pdf`);
+      const fileName = `${(formData.invoiceNumber || "invoice").trim().replace(/[^a-zA-Z0-9-_]/g, "_")}.pdf`;
+      pdf.save(fileName);
 
+      // Record download in user profile database
       fetch("/api/downloads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ templateId: id, invoiceNumber: formData.invoiceNumber }),
       }).catch(() => { });
+
+      triggerToast("success", "PDF Exported", `Saved ${fileName} to your device.`);
     } catch (err) {
       console.error("PDF generation failed:", err);
-      alert("PDF generation failed. Please try again.");
+      triggerToast("error", "PDF Generation Failed", err.message || "Please check your browser permissions and try again.");
     } finally {
       setDownloading(false);
     }
   }
 
   /* ============================================================
-     CALCULATIONS
+     CALCULATED TOTALS
   ============================================================ */
 
-  const subtotal = items.reduce(
-    (sum, item) => sum + (Number(item.qty) || 0) * (Number(item.price) || 0),
-    0
-  );
-  const taxAmount = taxEnabled ? subtotal * (Number(taxPercent || 0) / 100) : 0;
-  const discountAmount = discountEnabled ? subtotal * (Number(discountPercent || 0) / 100) : 0;
-  const grandTotal = subtotal + taxAmount - discountAmount;
+  const subtotal = items.reduce((sum, item) => {
+    const q = Math.max(1, Number(item.qty) || 1);
+    const p = Math.max(0, Number(item.price) || 0);
+    return sum + q * p;
+  }, 0);
+
+  const safeTaxPercent = Math.min(100, Math.max(0, Number(taxPercent) || 0));
+  const safeDiscountPercent = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+
+  const taxAmount = taxEnabled ? subtotal * (safeTaxPercent / 100) : 0;
+  const discountAmount = discountEnabled ? subtotal * (safeDiscountPercent / 100) : 0;
+  const grandTotal = Math.max(0, subtotal + taxAmount - discountAmount);
 
   if (loading) {
     return (
@@ -473,13 +711,77 @@ export default function EditorPage() {
   `;
 
   return (
-    <main className="min-h-screen bg-[#f7f7f5] pb-20">
+    <main className="min-h-screen bg-[#f7f7f5] pb-24">
       
-      {/* Top Workspace Header */}
+      {/* Toast Notification Container */}
+      {toast.show && (
+        <div className="fixed bottom-5 right-5 z-50 max-w-md animate-fade-in">
+          <div
+            className={`flex items-start gap-3 rounded-2xl border p-4 shadow-xl backdrop-blur-md ${
+              toast.type === "success"
+                ? "border-emerald-200 bg-emerald-50/95 text-emerald-900"
+                : toast.type === "error"
+                  ? "border-red-200 bg-red-50/95 text-red-900"
+                  : toast.type === "warning"
+                    ? "border-amber-200 bg-amber-50/95 text-amber-900"
+                    : "border-[#e8e8e3] bg-white text-[#141413]"
+            }`}
+          >
+            {toast.type === "success" && <CheckCircle2 size={18} className="shrink-0 text-emerald-600 mt-0.5" />}
+            {toast.type === "error" && <AlertCircle size={18} className="shrink-0 text-red-600 mt-0.5" />}
+            {toast.type === "warning" && <AlertTriangle size={18} className="shrink-0 text-amber-600 mt-0.5" />}
+            {toast.type === "info" && <Sparkles size={18} className="shrink-0 text-[#526b5b] mt-0.5" />}
+
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold leading-none">{toast.title}</p>
+              <p className="text-[11px] opacity-90 mt-1">{toast.message}</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setToast((prev) => ({ ...prev, show: false }))}
+              className="text-current opacity-60 hover:opacity-100 p-0.5"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Confirmation Modal */}
+      {confirmModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="w-full max-w-md rounded-3xl border border-[#e8e8e3] bg-white p-6 sm:p-7 shadow-2xl">
+            <h3 className="text-base font-bold text-[#141413]">{confirmModal.title}</h3>
+            <p className="mt-2 text-xs text-[#777771] leading-relaxed">{confirmModal.message}</p>
+            
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmModal((prev) => ({ ...prev, show: false }))}
+                className="rounded-xl border border-[#e5e5df] bg-white px-4 py-2 text-xs font-semibold text-[#555550] hover:bg-[#f5f5f2]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmModal.onConfirm}
+                className={`rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-sm transition ${
+                  confirmModal.isDestructive ? "bg-red-600 hover:bg-red-700" : "bg-[#11110f] hover:bg-[#252522]"
+                }`}
+              >
+                {confirmModal.confirmLabel || "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Sticky Workspace Header */}
       <div className="sticky top-[57px] z-40 border-b border-[#e8e8e3] bg-[#fafaf8]/95 backdrop-blur-md px-4 py-3 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           
-          {/* Left Breadcrumb */}
+          {/* Left Breadcrumb & Actions */}
           <div className="flex items-center gap-3">
             <Link
               href="/templates"
@@ -496,45 +798,58 @@ export default function EditorPage() {
                 {template.name}
               </span>
               <span className="text-[10px] text-[#8c8c87] hidden sm:block">
-                Interactive Invoice Studio
+                Auto-saving draft locally
               </span>
             </div>
           </div>
 
-          {/* Center Mobile View Tabs */}
-          <div className="flex xl:hidden items-center gap-1 rounded-xl bg-[#eeeee9] p-1 border border-[#e2e2dc]">
+          {/* Quick Toolbar */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setMobileTab("edit")}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition ${
-                mobileTab === "edit" ? "bg-white text-[#141413] shadow-sm" : "text-[#777771]"
-              }`}
+              onClick={handleUseSampleData}
+              title="Populate demo data to preview template"
+              className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e3] bg-white px-3 py-1.5 text-xs font-semibold text-[#141413] shadow-xs hover:bg-[#f5f5f2] transition"
             >
-              <Edit3 size={13} />
-              <span>Edit</span>
+              <Sparkles size={12} className="text-[#526b5b]" />
+              <span>Use Sample Data</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setMobileTab("preview")}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition ${
-                mobileTab === "preview" ? "bg-white text-[#141413] shadow-sm" : "text-[#777771]"
-              }`}
-            >
-              <Eye size={13} />
-              <span>Preview</span>
-            </button>
-          </div>
 
-          {/* Right Header Action */}
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e3] bg-white px-2.5 py-1 text-[10px] font-medium text-[#555550]">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inset-0 animate-ping rounded-full bg-[#526b5b] opacity-40" />
-                <span className="relative h-1.5 w-1.5 rounded-full bg-[#526b5b]" />
-              </span>
-              <span>Live Sync</span>
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              title="Reset all fields"
+              className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e3] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#8c8c87] hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition"
+            >
+              <RotateCcw size={12} />
+              <span>Clear Draft</span>
+            </button>
+
+            {/* Mobile View Switcher */}
+            <div className="flex xl:hidden items-center gap-1 rounded-xl bg-[#eeeee9] p-1 border border-[#e2e2dc]">
+              <button
+                type="button"
+                onClick={() => setMobileTab("edit")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                  mobileTab === "edit" ? "bg-white text-[#141413] shadow-sm" : "text-[#777771]"
+                }`}
+              >
+                <Edit3 size={13} />
+                <span>Edit</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab("preview")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                  mobileTab === "preview" ? "bg-white text-[#141413] shadow-sm" : "text-[#777771]"
+                }`}
+              >
+                <Eye size={13} />
+                <span>Preview</span>
+              </button>
             </div>
 
+            {/* Primary Download Button */}
             <button
               type="button"
               onClick={handleDownloadPDF}
@@ -549,24 +864,66 @@ export default function EditorPage() {
         </div>
       </div>
 
-      {/* Main Workspace Layout */}
+      {/* Main Studio Grid */}
       <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.1fr_0.9fr]">
           
           {/* ========================================================
-              LEFT COLUMN — STRUCTURED EDITOR
+              LEFT COLUMN — INVOICE FORM
           ========================================================= */}
           <section className={`space-y-6 ${mobileTab === "preview" ? "hidden xl:block" : "block"}`}>
             
-            {/* Step 1: General & Invoice Info */}
+            {/* Quick Helper Tools (Mobile/Tablet visible) */}
+            <div className="flex md:hidden items-center justify-between gap-2 p-2 rounded-2xl bg-[#eeeee9] border border-[#e2e2dc]">
+              <button
+                type="button"
+                onClick={handleUseSampleData}
+                className="flex-1 rounded-xl bg-white py-1.5 text-xs font-semibold text-[#141413] shadow-xs text-center"
+              >
+                Load Sample Data
+              </button>
+              <button
+                type="button"
+                onClick={handleClearDraft}
+                className="flex-1 rounded-xl py-1.5 text-xs font-semibold text-[#8c8c87] text-center"
+              >
+                Clear Fields
+              </button>
+            </div>
+
+            {/* Step 1: Currency & Invoice Metadata */}
             <div className="rounded-2xl border border-[#e8e8e3] bg-white p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-              <div className="flex items-center gap-2.5 pb-4 border-b border-[#f0f0ec]">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f2] text-[#141413]">
-                  <Building2 size={15} />
+              <div className="flex items-center justify-between pb-4 border-b border-[#f0f0ec]">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f2] text-[#141413]">
+                    <Building2 size={15} />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-[#141413]">1. General & Currency</h2>
+                    <p className="text-[11px] text-[#8c8c87]">Identifiers, date, and billing currency</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-[#141413]">1. Invoice & Business Info</h2>
-                  <p className="text-[11px] text-[#8c8c87]">Core identifiers and company profile</p>
+
+                {/* Currency Dropdown Pill */}
+                <div className="flex items-center gap-1.5">
+                  <Coins size={13} className="text-[#8c8c87]" />
+                  <select
+                    value={selectedCurrency.code}
+                    onChange={(e) => {
+                      const found = CURRENCIES.find((c) => c.code === e.target.value);
+                      if (found) {
+                        setSelectedCurrency(found);
+                        triggerToast("info", "Currency Changed", `All amounts updated to ${found.label}.`);
+                      }
+                    }}
+                    className="rounded-lg border border-[#e5e5df] bg-[#fafaf8] px-2.5 py-1 text-xs font-semibold text-[#141413] focus:border-[#11110f] focus:outline-none cursor-pointer"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -578,6 +935,7 @@ export default function EditorPage() {
                   <input
                     id="companyName"
                     type="text"
+                    maxLength={120}
                     value={formData.companyName}
                     onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                     placeholder="e.g. Acme Design Studio LLC"
@@ -602,6 +960,7 @@ export default function EditorPage() {
                   <input
                     id="invoiceNumber"
                     type="text"
+                    maxLength={40}
                     value={formData.invoiceNumber}
                     onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
                     placeholder="INV-0001"
@@ -624,7 +983,7 @@ export default function EditorPage() {
               </div>
             </div>
 
-            {/* Step 2: Sender & Client Details */}
+            {/* Step 2: Parties Details */}
             <div className="rounded-2xl border border-[#e8e8e3] bg-white p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
               <div className="flex items-center gap-2.5 pb-4 border-b border-[#f0f0ec]">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f2] text-[#141413]">
@@ -632,7 +991,7 @@ export default function EditorPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-[#141413]">2. Parties & Contact Details</h2>
-                  <p className="text-[11px] text-[#8c8c87]">Sender and recipient addresses</p>
+                  <p className="text-[11px] text-[#8c8c87]">Sender and recipient billing addresses</p>
                 </div>
               </div>
 
@@ -644,6 +1003,7 @@ export default function EditorPage() {
                   <textarea
                     id="from"
                     rows={4}
+                    maxLength={500}
                     value={formData.from}
                     onChange={(e) => setFormData({ ...formData, from: e.target.value })}
                     placeholder="Your Name / Studio&#10;123 Creative Blvd&#10;contact@studio.com&#10;+1 (555) 019-2834"
@@ -658,6 +1018,7 @@ export default function EditorPage() {
                   <textarea
                     id="billTo"
                     rows={4}
+                    maxLength={500}
                     value={formData.billTo}
                     onChange={(e) => setFormData({ ...formData, billTo: e.target.value })}
                     placeholder="Client Name / Corporation&#10;Attn: Accounts Payable&#10;456 Enterprise Way&#10;billing@client.com"
@@ -667,7 +1028,7 @@ export default function EditorPage() {
               </div>
             </div>
 
-            {/* Step 3: Line Items */}
+            {/* Step 3: Line Items with Strong Validations */}
             <div className="rounded-2xl border border-[#e8e8e3] bg-white p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
               <div className="flex items-center justify-between pb-4 border-b border-[#f0f0ec]">
                 <div className="flex items-center gap-2.5">
@@ -675,8 +1036,8 @@ export default function EditorPage() {
                     <Receipt size={15} />
                   </div>
                   <div>
-                    <h2 className="text-sm font-semibold text-[#141413]">3. Line Items & Services</h2>
-                    <p className="text-[11px] text-[#8c8c87]">Billable deliverables and prices</p>
+                    <h2 className="text-sm font-semibold text-[#141413]">3. Line Items & Deliverables</h2>
+                    <p className="text-[11px] text-[#8c8c87]">Itemized breakdown with automatic calculations</p>
                   </div>
                 </div>
 
@@ -689,10 +1050,12 @@ export default function EditorPage() {
                 </button>
               </div>
 
-              {/* Items List */}
               <div className="mt-5 space-y-3">
-                {items.map((item, index) => {
-                  const lineTotal = (Number(item.qty) || 0) * (Number(item.price) || 0);
+                {items.map((item) => {
+                  const safeQty = Math.max(1, Number(item.qty) || 1);
+                  const safePrice = Math.max(0, Number(item.price) || 0);
+                  const lineTotal = safeQty * safePrice;
+
                   return (
                     <div
                       key={item.id}
@@ -706,6 +1069,7 @@ export default function EditorPage() {
                           </label>
                           <input
                             type="text"
+                            maxLength={200}
                             value={item.description}
                             onChange={(e) => updateItem(item.id, "description", e.target.value)}
                             placeholder="e.g. Brand Identity Design & Strategy"
@@ -713,7 +1077,7 @@ export default function EditorPage() {
                           />
                         </div>
 
-                        {/* Quantity */}
+                        {/* Quantity (min 1, integer) */}
                         <div className="col-span-4 sm:col-span-2">
                           <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#8c8c87] mb-1">
                             Qty
@@ -721,35 +1085,38 @@ export default function EditorPage() {
                           <input
                             type="number"
                             min="1"
+                            max="99999"
+                            step="1"
                             value={item.qty}
-                            onChange={(e) => updateItem(item.id, "qty", Number(e.target.value))}
-                            className="w-full h-9 rounded-lg border border-[#e5e5df] bg-white px-2.5 text-xs text-[#1a1a19] focus:border-[#11110f] focus:outline-none"
+                            onChange={(e) => updateItem(item.id, "qty", e.target.value)}
+                            className="w-full h-9 rounded-lg border border-[#e5e5df] bg-white px-2.5 text-xs text-[#1a1a19] focus:border-[#11110f] focus:outline-none font-mono"
                           />
                         </div>
 
-                        {/* Price */}
+                        {/* Price (min 0) */}
                         <div className="col-span-5 sm:col-span-2">
                           <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#8c8c87] mb-1">
-                            Price ($)
+                            Price ({currencySymbol})
                           </label>
                           <input
                             type="number"
                             min="0"
+                            max="9999999"
                             step="0.01"
                             value={item.price}
-                            onChange={(e) => updateItem(item.id, "price", Number(e.target.value))}
-                            className="w-full h-9 rounded-lg border border-[#e5e5df] bg-white px-2.5 text-xs text-[#1a1a19] focus:border-[#11110f] focus:outline-none"
+                            onChange={(e) => updateItem(item.id, "price", e.target.value)}
+                            className="w-full h-9 rounded-lg border border-[#e5e5df] bg-white px-2.5 text-xs text-[#1a1a19] focus:border-[#11110f] focus:outline-none font-mono"
                           />
                         </div>
 
-                        {/* Total & Remove */}
+                        {/* Total & Trash */}
                         <div className="col-span-3 sm:col-span-2 flex items-center justify-between pt-5 sm:pt-0">
                           <div>
                             <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#8c8c87] mb-1 sm:hidden">
                               Total
                             </span>
-                            <span className="text-xs font-semibold text-[#141413]">
-                              ${lineTotal.toFixed(2)}
+                            <span className="text-xs font-semibold font-mono text-[#141413]">
+                              {currencySymbol}{lineTotal.toFixed(2)}
                             </span>
                           </div>
 
@@ -770,7 +1137,7 @@ export default function EditorPage() {
               </div>
             </div>
 
-            {/* Step 4: Taxes, Discounts & Adjustments */}
+            {/* Step 4: Tax & Discount Adjustments with Range Limits */}
             <div className="rounded-2xl border border-[#e8e8e3] bg-white p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
               <div className="flex items-center gap-2.5 pb-4 border-b border-[#f0f0ec]">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#f5f5f2] text-[#141413]">
@@ -778,12 +1145,12 @@ export default function EditorPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-[#141413]">4. Adjustments & Taxes</h2>
-                  <p className="text-[11px] text-[#8c8c87]">Optional taxes and client discounts</p>
+                  <p className="text-[11px] text-[#8c8c87]">Percentage-based adjustments (0% – 100%)</p>
                 </div>
               </div>
 
               <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* Tax Option */}
+                {/* Tax */}
                 <div className={`rounded-xl border p-4 transition ${taxEnabled ? "border-[#11110f]/20 bg-[#fafaf8]" : "border-[#e8e8e3] bg-white"}`}>
                   <label className="flex cursor-pointer items-center justify-between">
                     <span className="text-xs font-semibold text-[#141413]">Apply Sales Tax</span>
@@ -797,24 +1164,28 @@ export default function EditorPage() {
                   {taxEnabled && (
                     <div className="mt-3 pt-3 border-t border-[#e8e8e3]">
                       <label className="block text-[10px] font-medium text-[#777771] mb-1">
-                        Tax Rate Percentage (%)
+                        Tax Rate Percentage (0% to 100%)
                       </label>
                       <input
                         type="number"
                         min="0"
                         max="100"
+                        step="0.1"
                         value={taxPercent}
-                        onChange={(e) => setTaxPercent(Number(e.target.value))}
-                        className="w-full h-8 rounded-lg border border-[#e5e5df] bg-white px-2.5 text-xs text-[#1a1a19] focus:border-[#11110f] focus:outline-none"
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setTaxPercent(isNaN(val) ? 0 : Math.min(100, Math.max(0, val)));
+                        }}
+                        className="w-full h-8 rounded-lg border border-[#e5e5df] bg-white px-2.5 text-xs text-[#1a1a19] focus:border-[#11110f] focus:outline-none font-mono"
                       />
                     </div>
                   )}
                 </div>
 
-                {/* Discount Option */}
+                {/* Discount */}
                 <div className={`rounded-xl border p-4 transition ${discountEnabled ? "border-[#11110f]/20 bg-[#fafaf8]" : "border-[#e8e8e3] bg-white"}`}>
                   <label className="flex cursor-pointer items-center justify-between">
-                    <span className="text-xs font-semibold text-[#141413]">Apply Discount</span>
+                    <span className="text-xs font-semibold text-[#141413]">Apply Client Discount</span>
                     <input
                       type="checkbox"
                       checked={discountEnabled}
@@ -825,15 +1196,19 @@ export default function EditorPage() {
                   {discountEnabled && (
                     <div className="mt-3 pt-3 border-t border-[#e8e8e3]">
                       <label className="block text-[10px] font-medium text-[#777771] mb-1">
-                        Discount Percentage (%)
+                        Discount Rate Percentage (0% to 100%)
                       </label>
                       <input
                         type="number"
                         min="0"
                         max="100"
+                        step="0.1"
                         value={discountPercent}
-                        onChange={(e) => setDiscountPercent(Number(e.target.value))}
-                        className="w-full h-8 rounded-lg border border-[#e5e5df] bg-white px-2.5 text-xs text-[#1a1a19] focus:border-[#11110f] focus:outline-none"
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setDiscountPercent(isNaN(val) ? 0 : Math.min(100, Math.max(0, val)));
+                        }}
+                        className="w-full h-8 rounded-lg border border-[#e5e5df] bg-white px-2.5 text-xs text-[#1a1a19] focus:border-[#11110f] focus:outline-none font-mono"
                       />
                     </div>
                   )}
@@ -849,7 +1224,7 @@ export default function EditorPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-[#141413]">5. Media & Branding</h2>
-                  <p className="text-[11px] text-[#8c8c87]">Upload company logo and signature</p>
+                  <p className="text-[11px] text-[#8c8c87]">Upload company logo and signature (Max 5MB)</p>
                 </div>
               </div>
 
@@ -874,7 +1249,7 @@ export default function EditorPage() {
                       </button>
                     </div>
                   ) : (
-                    <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-[#d8d8d2] bg-white py-3 text-xs font-semibold text-[#141413] hover:bg-[#f5f5f2] transition shadow-sm">
+                    <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-[#d8d8d2] bg-white py-3 text-xs font-semibold text-[#141413] hover:bg-[#f5f5f2] transition shadow-xs">
                       <span>{uploading.logo ? "Uploading..." : "Upload Logo"}</span>
                       <input
                         type="file"
@@ -906,7 +1281,7 @@ export default function EditorPage() {
                       </button>
                     </div>
                   ) : (
-                    <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-[#d8d8d2] bg-white py-3 text-xs font-semibold text-[#141413] hover:bg-[#f5f5f2] transition shadow-sm">
+                    <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-[#d8d8d2] bg-white py-3 text-xs font-semibold text-[#141413] hover:bg-[#f5f5f2] transition shadow-xs">
                       <span>{uploading.signature ? "Uploading..." : "Upload Signature"}</span>
                       <input
                         type="file"
@@ -923,26 +1298,26 @@ export default function EditorPage() {
             {/* Financial Summary Card */}
             <div className="rounded-2xl border border-[#e8e8e3] bg-[#11110f] p-6 text-white shadow-md">
               <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                Invoice Breakdown
+                Invoice Breakdown ({selectedCurrency.code})
               </span>
 
               <div className="mt-4 space-y-2 text-xs">
                 <div className="flex justify-between text-white/70">
                   <span>Subtotal</span>
-                  <span className="font-mono text-sm font-medium text-white">${subtotal.toFixed(2)}</span>
+                  <span className="font-mono text-sm font-medium text-white">{currencySymbol}{subtotal.toFixed(2)}</span>
                 </div>
 
                 {taxEnabled && (
                   <div className="flex justify-between text-white/70">
-                    <span>Tax ({taxPercent}%)</span>
-                    <span className="font-mono text-sm font-medium text-white">+${taxAmount.toFixed(2)}</span>
+                    <span>Tax ({safeTaxPercent}%)</span>
+                    <span className="font-mono text-sm font-medium text-white">+{currencySymbol}{taxAmount.toFixed(2)}</span>
                   </div>
                 )}
 
                 {discountEnabled && (
                   <div className="flex justify-between text-white/70">
-                    <span>Discount ({discountPercent}%)</span>
-                    <span className="font-mono text-sm font-medium text-emerald-400">-${discountAmount.toFixed(2)}</span>
+                    <span>Discount ({safeDiscountPercent}%)</span>
+                    <span className="font-mono text-sm font-medium text-emerald-400">-{currencySymbol}{discountAmount.toFixed(2)}</span>
                   </div>
                 )}
 
@@ -951,7 +1326,7 @@ export default function EditorPage() {
                 <div className="flex items-baseline justify-between pt-1">
                   <span className="text-sm font-semibold text-white">Grand Total</span>
                   <span className="font-mono text-2xl font-bold tracking-tight text-white">
-                    ${grandTotal.toFixed(2)}
+                    {currencySymbol}{grandTotal.toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -987,7 +1362,7 @@ export default function EditorPage() {
                 <div className="flex items-center gap-2">
                   <div className="flex h-2 w-2 rounded-full bg-[#526b5b]" />
                   <span className="text-xs font-semibold text-[#333330]">
-                    Document Output Preview
+                    Live Output Preview ({selectedCurrency.code})
                   </span>
                 </div>
                 <span className="text-[10px] font-medium text-[#777771] bg-white border border-[#e8e8e3] rounded-full px-2.5 py-0.5 shadow-xs">

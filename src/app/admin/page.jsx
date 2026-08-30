@@ -87,14 +87,24 @@ export default function AdminPage() {
     };
   }, []);
 
-  async function deleteTemplate(id) {
-    if (!window.confirm("Delete this template permanently from the platform?")) return;
+  const [deleteModal, setDeleteModal] = useState({ show: false, templateId: null, templateName: "" });
+
+  function requestDeleteTemplate(t) {
+    setDeleteModal({ show: true, templateId: t._id, templateName: t.name });
+  }
+
+  async function confirmDeleteTemplate() {
+    if (!deleteModal.templateId) return;
+    const id = deleteModal.templateId;
     const response = await fetch(`/api/templates/${id}`, { method: "DELETE" });
     if (response.ok) {
       setTemplates((current) => current.filter((template) => template._id !== id));
       setStats((current) => ({ ...current, templates: Math.max(0, current.templates - 1) }));
-      setMessage({ type: "success", text: "Template removed successfully." });
+      setMessage({ type: "success", text: `Template "${deleteModal.templateName}" removed successfully.` });
+    } else {
+      setMessage({ type: "error", text: "Failed to delete template." });
     }
+    setDeleteModal({ show: false, templateId: null, templateName: "" });
   }
 
   async function makeAdmin(id) {
@@ -396,7 +406,7 @@ export default function AdminPage() {
 
                       <button
                         type="button"
-                        onClick={() => deleteTemplate(t._id)}
+                        onClick={() => requestDeleteTemplate(t)}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 transition"
                       >
                         <Trash2 size={13} />
@@ -664,6 +674,35 @@ export default function AdminPage() {
         )}
 
       </div>
+
+      {/* Custom Delete Confirmation Modal */}
+      {deleteModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="w-full max-w-md rounded-3xl border border-[#e8e8e3] bg-white p-6 sm:p-7 shadow-2xl">
+            <h3 className="text-base font-bold text-[#141413]">Delete Template?</h3>
+            <p className="mt-2 text-xs text-[#777771] leading-relaxed">
+              Are you sure you want to permanently remove <span className="font-semibold text-[#141413]">&ldquo;{deleteModal.templateName}&rdquo;</span> from the platform? Users will no longer be able to select or create invoices with this template.
+            </p>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteModal({ show: false, templateId: null, templateName: "" })}
+                className="rounded-xl border border-[#e5e5df] bg-white px-4 py-2 text-xs font-semibold text-[#555550] hover:bg-[#f5f5f2]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteTemplate}
+                className="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition"
+              >
+                Delete Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
