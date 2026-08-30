@@ -261,18 +261,18 @@ export default function EditorPage() {
       (sum, item) =>
         sum +
         (Number(item.qty) || 0) *
-          (Number(item.price) || 0),
+        (Number(item.price) || 0),
       0
     );
 
     const taxAmount = taxEnabled
       ? subtotal *
-        (Number(taxPercent) / 100)
+      (Number(taxPercent) / 100)
       : 0;
 
     const discountAmount = discountEnabled
       ? subtotal *
-        (Number(discountPercent) / 100)
+      (Number(discountPercent) / 100)
       : 0;
 
     const grandTotal =
@@ -387,9 +387,9 @@ export default function EditorPage() {
       prev.map((item) =>
         item.id === itemId
           ? {
-              ...item,
-              [field]: value,
-            }
+            ...item,
+            [field]: value,
+          }
           : item
       )
     );
@@ -500,17 +500,17 @@ export default function EditorPage() {
           image.complete
             ? Promise.resolve()
             : new Promise((resolve) => {
-                image.addEventListener(
-                  "load",
-                  resolve,
-                  { once: true }
-                );
-                image.addEventListener(
-                  "error",
-                  resolve,
-                  { once: true }
-                );
-              })
+              image.addEventListener(
+                "load",
+                resolve,
+                { once: true }
+              );
+              image.addEventListener(
+                "error",
+                resolve,
+                { once: true }
+              );
+            })
         )
       );
 
@@ -594,16 +594,15 @@ export default function EditorPage() {
       );
 
       pdf.save(
-        `${
-          formData.invoiceNumber ||
-          "invoice"
+        `${formData.invoiceNumber ||
+        "invoice"
         }.pdf`
       );
       fetch("/api/downloads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ templateId: id, invoiceNumber: formData.invoiceNumber }),
-      }).catch(() => {});
+      }).catch(() => { });
     } catch (err) {
       console.error(
         "PDF generation failed:",
@@ -628,7 +627,7 @@ export default function EditorPage() {
         <div className="mx-auto max-w-[1200px]">
           <div className="rounded-2xl border border-black/[0.06] bg-white p-8">
             <p className="text-sm text-black/45">
-              Loading template...
+              Please wait while we fetch the template...
             </p>
           </div>
         </div>
@@ -678,19 +677,19 @@ export default function EditorPage() {
     (sum, item) =>
       sum +
       (Number(item.qty) || 0) *
-        (Number(item.price) || 0),
+      (Number(item.price) || 0),
     0
   );
 
   const taxAmount = taxEnabled
     ? subtotal *
-      (Number(taxPercent) / 100)
+    (Number(taxPercent) / 100)
     : 0;
 
   const discountAmount =
     discountEnabled
       ? subtotal *
-        (Number(discountPercent) / 100)
+      (Number(discountPercent) / 100)
       : 0;
 
   const grandTotal =
@@ -716,7 +715,7 @@ export default function EditorPage() {
           <button
             type="button"
             onClick={() =>
-              router.push("/user")
+              router.push("/templates")
             }
             className="group inline-flex items-center gap-2 rounded-full border border-black/[0.07] bg-white px-4 py-2 text-xs font-medium text-black/55 shadow-[0_2px_12px_rgba(0,0,0,0.025)] transition-all duration-200 hover:-translate-x-0.5 hover:text-black"
           >
