@@ -1,257 +1,59 @@
-// "use client";
-
-// import { useEffect, useState } from "react";
-
-// export default function AdminPage() {
-//   const [name, setName] = useState("");
-//   const [html, setHtml] = useState("");
-//   const [css, setCss] = useState("");
-//   const [thumbnailFile, setThumbnailFile] = useState(null);
-//   const [hasBackgroundImage, setHasBackgroundImage] = useState(false);
-//   const [defaultTaxEnabled, setDefaultTaxEnabled] = useState(false);
-//   const [defaultDiscountEnabled, setDefaultDiscountEnabled] = useState(false);
-//   const [loading, setLoading] = useState(false);
-//   const [templates, setTemplates] = useState([]);
-//   const [message, setMessage] = useState("");
-
-//   async function loadTemplates() {
-//     const res = await fetch("/api/templates");
-//     const data = await res.json();
-//     setTemplates(data);
-//   }
-
-//   useEffect(() => {
-//     let cancelled = false;
-
-//     fetch("/api/templates")
-//       .then((res) => res.json())
-//       .then((data) => {
-//         if (!cancelled) {
-//           setTemplates(data);
-//         }
-//       })
-//       .catch(() => {
-//         if (!cancelled) {
-//           setTemplates([]);
-//         }
-//       });
-
-//     return () => {
-//       cancelled = true;
-//     };
-//   }, []);
-
-//   async function handleSubmit(e) {
-//     e.preventDefault();
-//     if (!name || !html || !css || !thumbnailFile) {
-//       setMessage("Please fill all fields and select a thumbnail image.");
-//       return;
-//     }
-
-//     setLoading(true);
-//     setMessage("");
-
-//     try {
-//       // 1. Upload thumbnail to Cloudinary
-//       const fd = new FormData();
-//       fd.append("file", thumbnailFile);
-//       fd.append("folder", "invoicepro/thumbnails");
-
-//       const uploadRes = await fetch("/api/upload", {
-//         method: "POST",
-//         body: fd,
-//       });
-//       const uploadData = await uploadRes.json();
-
-//       if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
-
-//       // 2. Save template to MongoDB
-//       const res = await fetch("/api/templates", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({
-//           name,
-//           html,
-//           css,
-//           thumbnailUrl: uploadData.url,
-//           hasBackgroundImage,
-//           defaultTaxEnabled,
-//           defaultDiscountEnabled,
-//         }),
-//       });
-
-//       if (!res.ok) {
-//         const d = await res.json();
-//         throw new Error(d.error || "Failed to save template");
-//       }
-
-//       setMessage("Template uploaded successfully!");
-//       setName("");
-//       setHtml("");
-//       setCss("");
-//       setThumbnailFile(null);
-//       setHasBackgroundImage(false);
-//       setDefaultTaxEnabled(false);
-//       setDefaultDiscountEnabled(false);
-//       loadTemplates();
-//     } catch (err) {
-//       setMessage(err.message);
-//     } finally {
-//       setLoading(false);
-//     }
-//   }
-
-//   return (
-//     <div className="space-y-10">
-//       <div>
-//         <h1 className="text-2xl font-bold mb-4">Upload New Template</h1>
-
-//         <form
-//           onSubmit={handleSubmit}
-//           className="bg-white border rounded-xl p-6 space-y-4 shadow-sm"
-//         >
-//           <div>
-//             <label className="block text-sm font-medium mb-1">
-//               Template Name
-//             </label>
-//             <input
-//               type="text"
-//               value={name}
-//               onChange={(e) => setName(e.target.value)}
-//               className="w-full border rounded-lg px-3 py-2"
-//               placeholder="e.g. Modern Hotel Invoice"
-//             />
-//           </div>
-
-//           <div>
-//             <label className="block text-sm font-medium mb-1">
-//               HTML (must use data-field attributes)
-//             </label>
-//             <textarea
-//               value={html}
-//               onChange={(e) => setHtml(e.target.value)}
-//               rows={8}
-//               className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
-//               placeholder='<div data-field="company-name"></div> ...'
-//             />
-//           </div>
-
-//           <div>
-//             <label className="block text-sm font-medium mb-1">CSS</label>
-//             <textarea
-//               value={css}
-//               onChange={(e) => setCss(e.target.value)}
-//               rows={8}
-//               className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
-//               placeholder=".invoice { ... }"
-//             />
-//           </div>
-
-//           <div>
-//             <label className="block text-sm font-medium mb-1">
-//               Thumbnail Image
-//             </label>
-//             <input
-//               type="file"
-//               accept="image/*"
-//               onChange={(e) => setThumbnailFile(e.target.files[0])}
-//             />
-//           </div>
-
-//           <div className="flex flex-wrap gap-6 text-sm">
-//             <label className="flex items-center gap-2">
-//               <input
-//                 type="checkbox"
-//                 checked={hasBackgroundImage}
-//                 onChange={(e) => setHasBackgroundImage(e.target.checked)}
-//               />
-//               Has background image
-//             </label>
-//             <label className="flex items-center gap-2">
-//               <input
-//                 type="checkbox"
-//                 checked={defaultTaxEnabled}
-//                 onChange={(e) => setDefaultTaxEnabled(e.target.checked)}
-//               />
-//               Tax enabled by default
-//             </label>
-//             <label className="flex items-center gap-2">
-//               <input
-//                 type="checkbox"
-//                 checked={defaultDiscountEnabled}
-//                 onChange={(e) => setDefaultDiscountEnabled(e.target.checked)}
-//               />
-//               Discount enabled by default
-//             </label>
-//           </div>
-
-//           {message && (
-//             <p className="text-sm text-blue-600 font-medium">{message}</p>
-//           )}
-
-//           <button
-//             type="submit"
-//             disabled={loading}
-//             className="bg-black text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-//           >
-//             {loading ? "Uploading..." : "Upload Template"}
-//           </button>
-//         </form>
-//       </div>
-
-//       <div>
-//         <h2 className="text-xl font-bold mb-4">
-//           Existing Templates ({templates.length})
-//         </h2>
-//         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-//           {templates.map((t) => (
-//             <div
-//               key={t._id}
-//               className="border rounded-lg overflow-hidden bg-white shadow-sm"
-//             >
-//               <img
-//                 src={t.thumbnailUrl}
-//                 alt={t.name}
-//                 className="w-full h-32 object-cover"
-//               />
-//               <div className="p-2">
-//                 <p className="text-sm font-medium truncate">{t.name}</p>
-//               </div>
-//             </div>
-//           ))}
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
-
 "use client";
 
-import { useEffect, useState } from "react";
-import { signOut } from "next-auth/react";
+import { useEffect, useState, useMemo } from "react";
+import { signOut, useSession } from "next-auth/react";
 import Image from "next/image";
+import Link from "next/link";
+import {
+  ShieldCheck,
+  FileText,
+  Users,
+  Download,
+  Plus,
+  Trash2,
+  ExternalLink,
+  Code,
+  UploadCloud,
+  CheckCircle2,
+  AlertCircle,
+  LogOut,
+  LayoutGrid,
+  Sparkles,
+  Search,
+  Settings
+} from "lucide-react";
 
 export default function AdminPage() {
+  const { data: session } = useSession();
+  const [activeTab, setActiveTab] = useState("templates"); // "templates", "upload", "users"
+  
+  // Template form state
   const [name, setName] = useState("");
   const [html, setHtml] = useState("");
   const [css, setCss] = useState("");
   const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState("");
   const [hasBackgroundImage, setHasBackgroundImage] = useState(false);
   const [defaultTaxEnabled, setDefaultTaxEnabled] = useState(false);
   const [defaultDiscountEnabled, setDefaultDiscountEnabled] = useState(false);
+  
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState([]);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState({ type: "", text: "" });
   const [stats, setStats] = useState({ templates: 0, users: 0, downloads: 0 });
   const [users, setUsers] = useState([]);
+  const [searchFilter, setSearchFilter] = useState("");
 
   async function loadTemplates() {
-    const res = await fetch("/api/templates");
-    if (!res.ok) throw new Error("Unable to load templates");
-    const data = await res.json();
-    setTemplates(data);
-    setStats((current) => ({ ...current, templates: data.length }));
+    try {
+      const res = await fetch("/api/templates");
+      if (!res.ok) throw new Error("Unable to load templates");
+      const data = await res.json();
+      setTemplates(Array.isArray(data) ? data : []);
+      setStats((current) => ({ ...current, templates: data.length }));
+    } catch {
+      // Ignore
+    }
   }
 
   useEffect(() => {
@@ -267,44 +69,64 @@ export default function AdminPage() {
         ]);
         if (cancelled) return;
         setTemplates(Array.isArray(templateData) ? templateData : []);
-        setStats({ ...statsData, templates: Array.isArray(templateData) ? templateData.length : 0, users: usersData.total ?? usersData.users?.length ?? 0 });
+        setStats({
+          ...statsData,
+          templates: Array.isArray(templateData) ? templateData.length : 0,
+          users: usersData.total ?? usersData.users?.length ?? 0,
+        });
         setUsers(usersData.users || []);
       })
       .catch(() => {
         if (!cancelled) {
-          setTemplates([]);
-          setUsers([]);
-          setMessage("Unable to load admin data. Please refresh and try again.");
+          setMessage({ type: "error", text: "Unable to load admin analytics. Please refresh." });
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function deleteTemplate(id) {
-    if (!window.confirm("Delete this template permanently?")) return;
+    if (!window.confirm("Delete this template permanently from the platform?")) return;
     const response = await fetch(`/api/templates/${id}`, { method: "DELETE" });
     if (response.ok) {
       setTemplates((current) => current.filter((template) => template._id !== id));
       setStats((current) => ({ ...current, templates: Math.max(0, current.templates - 1) }));
+      setMessage({ type: "success", text: "Template removed successfully." });
     }
   }
 
   async function makeAdmin(id) {
-    const response = await fetch("/api/admin/users", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, role: "admin" }) });
-    if (response.ok) setUsers((current) => current.map((user) => user._id === id ? { ...user, role: "admin" } : user));
+    const response = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, role: "admin" }),
+    });
+    if (response.ok) {
+      setUsers((current) =>
+        current.map((user) => (user._id === id ? { ...user, role: "admin" } : user))
+      );
+      setMessage({ type: "success", text: "User role elevated to Admin." });
+    }
+  }
+
+  function handleFileSelection(file) {
+    if (!file) return;
+    setThumbnailFile(file);
+    setThumbnailPreview(URL.createObjectURL(file));
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
 
     if (!name || !html || !css || !thumbnailFile) {
-      setMessage("Please fill all fields and select a thumbnail image.");
+      setMessage({ type: "error", text: "Please fill in all fields (Name, HTML, CSS) and select a thumbnail image." });
       return;
     }
 
     setLoading(true);
-    setMessage("");
+    setMessage({ type: "", text: "" });
 
     try {
       // 1. Upload thumbnail to Cloudinary
@@ -318,9 +140,8 @@ export default function AdminPage() {
       });
 
       const uploadData = await uploadRes.json();
-
       if (!uploadRes.ok) {
-        throw new Error(uploadData.error || "Upload failed");
+        throw new Error(uploadData.error || "Image upload failed");
       }
 
       // 2. Save template to MongoDB
@@ -343,394 +164,506 @@ export default function AdminPage() {
         throw new Error(d.error || "Failed to save template");
       }
 
-      setMessage("Template uploaded successfully!");
+      setMessage({ type: "success", text: `Template "${name}" published successfully!` });
       setName("");
       setHtml("");
       setCss("");
       setThumbnailFile(null);
+      setThumbnailPreview("");
       setHasBackgroundImage(false);
       setDefaultTaxEnabled(false);
       setDefaultDiscountEnabled(false);
 
-      loadTemplates();
+      await loadTemplates();
+      setActiveTab("templates");
     } catch (err) {
-      setMessage(err.message);
+      setMessage({ type: "error", text: err.message });
     } finally {
       setLoading(false);
     }
   }
 
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((t) =>
+      t.name?.toLowerCase().includes(searchFilter.toLowerCase().trim())
+    );
+  }, [templates, searchFilter]);
+
   return (
-    <div className="min-h-screen bg-[#f7f7f5] px-4 py-8 sm:px-6 lg:px-10">
-      <div className="mx-auto w-full max-w-[1400px] space-y-10">
-        {/* =========================
-            PAGE HEADER
-        ========================== */}
-        <div className="flex flex-col gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9a9a95]">
-            Invoice Pro · Admin
-          </p>
-
+    <main className="min-h-screen bg-[#f7f7f5] px-4 py-8 sm:px-6 lg:px-10">
+      <div className="mx-auto w-full max-w-7xl space-y-8">
+        
+        {/* Admin Header */}
+        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between pb-6 border-b border-[#e8e8e3]">
           <div>
-            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[#20201e] sm:text-3xl">
-              Upload New Template
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e3] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8c8c87] shadow-xs mb-2">
+              <ShieldCheck size={12} className="text-[#526b5b]" />
+              <span>Admin Console</span>
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-[#141413] sm:text-4xl">
+              Platform Administration
             </h1>
-
-            <p className="mt-1 text-sm text-[#8c8c87]">
-              Create and manage professional invoice templates.
+            <p className="mt-1 text-xs sm:text-sm text-[#777771]">
+              Manage templates, monitor user activity, and publish new invoice layouts.
             </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab("upload")}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#11110f] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#252522] transition"
+            >
+              <Plus size={14} />
+              <span>Create Template</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#e8e8e3] bg-white px-4 py-2.5 text-xs font-semibold text-[#8c8c87] hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition shadow-xs"
+            >
+              <LogOut size={13} />
+              <span>Sign out</span>
+            </button>
+          </div>
+        </section>
+
+        {/* Global Alert Notification */}
+        {message.text && (
+          <div
+            className={`rounded-2xl border p-4 text-xs font-semibold flex items-center justify-between animate-fade-in ${
+              message.type === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-red-200 bg-red-50 text-red-900"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {message.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+              <span>{message.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMessage({ type: "", text: "" })}
+              className="text-current opacity-70 hover:opacity-100"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Platform Metrics Cards */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="rounded-2xl border border-[#e8e8e3] bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between text-[#8c8c87]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider">Templates</span>
+              <FileText size={16} />
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-[#141413]">
+              {stats.templates}
+            </p>
+            <p className="mt-1 text-[11px] text-[#8c8c87]">Published designs</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#e8e8e3] bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between text-[#8c8c87]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider">Total Users</span>
+              <Users size={16} />
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-[#141413]">
+              {stats.users}
+            </p>
+            <p className="mt-1 text-[11px] text-[#8c8c87]">Registered accounts</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#e8e8e3] bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between text-[#8c8c87]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider">PDF Exports</span>
+              <Download size={16} />
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-[#141413]">
+              {stats.downloads}
+            </p>
+            <p className="mt-1 text-[11px] text-[#8c8c87]">Total generated files</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#e8e8e3] bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between text-[#8c8c87]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider">Admin Status</span>
+              <ShieldCheck size={16} className="text-[#526b5b]" />
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-[#141413]">
+              Superuser
+            </p>
+            <p className="mt-1 text-[11px] text-[#8c8c87]">Verified credentials</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-y border-[#e8e8e3] py-3">
-          <a href="#upload" className="rounded-lg bg-[#222220] px-3 py-2 text-xs font-semibold text-white">Add Templates</a>
-          <a href="#library" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#777771] hover:bg-white">All templates</a>
-          <a href="#users" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#777771] hover:bg-white">Users</a>
-          <button onClick={() => signOut({ callbackUrl: "/" })} className="ml-auto rounded-lg px-3 py-2 text-xs font-semibold text-[#9a625c] hover:bg-white">Log out</button>
+        {/* Tab Navigation Controls */}
+        <div className="flex border-b border-[#e8e8e3] gap-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab("templates")}
+            className={`pb-3 text-xs font-semibold tracking-wide transition border-b-2 flex items-center gap-1.5 ${
+              activeTab === "templates"
+                ? "border-[#11110f] text-[#141413]"
+                : "border-transparent text-[#8c8c87] hover:text-[#141413]"
+            }`}
+          >
+            <LayoutGrid size={14} />
+            <span>Templates Catalog ({templates.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("upload")}
+            className={`pb-3 text-xs font-semibold tracking-wide transition border-b-2 flex items-center gap-1.5 ${
+              activeTab === "upload"
+                ? "border-[#11110f] text-[#141413]"
+                : "border-transparent text-[#8c8c87] hover:text-[#141413]"
+            }`}
+          >
+            <Plus size={14} />
+            <span>Create New Template</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("users")}
+            className={`pb-3 text-xs font-semibold tracking-wide transition border-b-2 flex items-center gap-1.5 ${
+              activeTab === "users"
+                ? "border-[#11110f] text-[#141413]"
+                : "border-transparent text-[#8c8c87] hover:text-[#141413]"
+            }`}
+          >
+            <Users size={14} />
+            <span>User Management ({users.length})</span>
+          </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[['Templates', stats.templates], ['Users', stats.users], ['Total downloads', stats.downloads], ['Role', 'Admin']].map(([label, value]) => <div key={label} className="rounded-2xl border border-[#e8e8e3] bg-white p-4"><p className="text-[10px] uppercase tracking-[0.12em] text-[#a0a09a]">{label}</p><p className="mt-2 text-2xl font-semibold text-[#292927]">{value}</p></div>)}
-        </div>
-
-        {/* =========================
-            UPLOAD FORM
-        ========================== */}
-        <form id="upload"
-          onSubmit={handleSubmit}
-          className="rounded-2xl border border-[#e9e9e5] bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:p-7 lg:p-8"
-        >
-          <div className="space-y-7">
-            {/* Template Name */}
-            <div>
-              <label className="mb-2 block text-xs font-medium text-[#4f4f4a]">
-                Template name
-              </label>
-
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Modern Hotel Invoice"
-                className="h-11 w-full rounded-xl border border-[#e7e7e3] bg-[#fafaf8] px-4 text-sm text-[#292927] outline-none transition placeholder:text-[#b4b4ae] focus:border-[#cfcfca] focus:bg-white focus:ring-4 focus:ring-[#000000]/[0.025]"
-              />
-            </div>
-
-            {/* HTML + CSS */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* HTML */}
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="text-xs font-medium text-[#4f4f4a]">
-                    HTML template
-                  </label>
-
-                  <span className="rounded-full bg-[#f3f3f0] px-2.5 py-1 text-[10px] font-medium text-[#999993]">
-                    HTML
-                  </span>
-                </div>
-
-                <textarea
-                  value={html}
-                  onChange={(e) => setHtml(e.target.value)}
-                  rows={10}
-                  placeholder='<div data-field="company-name"></div> ...'
-                  className="w-full resize-y rounded-xl border border-[#e7e7e3] bg-[#fafaf8] px-4 py-3 font-mono text-xs leading-6 text-[#383834] outline-none transition placeholder:text-[#b4b4ae] focus:border-[#cfcfca] focus:bg-white focus:ring-4 focus:ring-[#000000]/[0.025]"
-                />
-
-                <p className="mt-2 text-[11px] text-[#a0a09a]">
-                  Use <span className="font-mono">data-field</span> attributes
-                  for dynamic invoice content.
-                </p>
-              </div>
-
-              {/* CSS */}
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="text-xs font-medium text-[#4f4f4a]">
-                    CSS styles
-                  </label>
-
-                  <span className="rounded-full bg-[#f3f3f0] px-2.5 py-1 text-[10px] font-medium text-[#999993]">
-                    CSS
-                  </span>
-                </div>
-
-                <textarea
-                  value={css}
-                  onChange={(e) => setCss(e.target.value)}
-                  rows={10}
-                  placeholder=".invoice { ... }"
-                  className="w-full resize-y rounded-xl border border-[#e7e7e3] bg-[#fafaf8] px-4 py-3 font-mono text-xs leading-6 text-[#383834] outline-none transition placeholder:text-[#b4b4ae] focus:border-[#cfcfca] focus:bg-white focus:ring-4 focus:ring-[#000000]/[0.025]"
-                />
-
-                <p className="mt-2 text-[11px] text-[#a0a09a]">
-                  Add custom styling for the generated invoice.
-                </p>
-              </div>
-            </div>
-
-            {/* Thumbnail Upload */}
-            <div>
-              <label className="mb-2 block text-xs font-medium text-[#4f4f4a]">
-                Thumbnail image
-              </label>
-
-              <label className="group flex min-h-[145px] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#dcdcd7] bg-[#fafaf8] px-5 py-6 text-center transition hover:border-[#c8c8c2] hover:bg-[#f7f7f5]">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setThumbnailFile(e.target.files[0])}
-                  className="hidden"
-                />
-
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-[#ededE8]">
-                  <svg
-                    width="19"
-                    height="19"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    className="text-[#6d6d67]"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4 16.5V19a1 1 0 001 1h14a1 1 0 001-1v-2.5M12 15V4m0 0L8 8m4-4l4 4"
-                    />
-                  </svg>
-                </div>
-
-                <span className="text-sm font-medium text-[#4a4a46]">
-                  {thumbnailFile
-                    ? thumbnailFile.name
-                    : "Choose thumbnail image"}
-                </span>
-
-                <span className="mt-1 text-[11px] text-[#a1a19b]">
-                  PNG, JPG or WEBP · Recommended invoice preview
-                </span>
-              </label>
-            </div>
-
-            {/* Options */}
-            <div className="border-t border-[#eeeeea] pt-6">
-              <p className="mb-4 text-xs font-medium text-[#4f4f4a]">
-                Template options
+        {/* TAB 1: TEMPLATES CATALOG */}
+        {activeTab === "templates" && (
+          <section className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <p className="text-xs text-[#8c8c87]">
+                Live templates available to all platform users
               </p>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {/* Background */}
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#ecece8] bg-[#fafaf8] px-4 py-3.5 transition hover:bg-[#f6f6f3]">
-                  <input
-                    type="checkbox"
-                    checked={hasBackgroundImage}
-                    onChange={(e) =>
-                      setHasBackgroundImage(e.target.checked)
-                    }
-                    className="h-4 w-4 rounded border-[#d5d5d0] accent-[#222]"
-                  />
-
-                  <span>
-                    <span className="block text-xs font-medium text-[#4a4a46]">
-                      Background image
-                    </span>
-
-                    <span className="mt-0.5 block text-[10px] text-[#a1a19b]">
-                      Enable background support
-                    </span>
-                  </span>
-                </label>
-
-                {/* Tax */}
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#ecece8] bg-[#fafaf8] px-4 py-3.5 transition hover:bg-[#f6f6f3]">
-                  <input
-                    type="checkbox"
-                    checked={defaultTaxEnabled}
-                    onChange={(e) =>
-                      setDefaultTaxEnabled(e.target.checked)
-                    }
-                    className="h-4 w-4 rounded border-[#d5d5d0] accent-[#222]"
-                  />
-
-                  <span>
-                    <span className="block text-xs font-medium text-[#4a4a46]">
-                      Tax enabled
-                    </span>
-
-                    <span className="mt-0.5 block text-[10px] text-[#a1a19b]">
-                      Enable tax by default
-                    </span>
-                  </span>
-                </label>
-
-                {/* Discount */}
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#ecece8] bg-[#fafaf8] px-4 py-3.5 transition hover:bg-[#f6f6f3]">
-                  <input
-                    type="checkbox"
-                    checked={defaultDiscountEnabled}
-                    onChange={(e) =>
-                      setDefaultDiscountEnabled(e.target.checked)
-                    }
-                    className="h-4 w-4 rounded border-[#d5d5d0] accent-[#222]"
-                  />
-
-                  <span>
-                    <span className="block text-xs font-medium text-[#4a4a46]">
-                      Discount enabled
-                    </span>
-
-                    <span className="mt-0.5 block text-[10px] text-[#a1a19b]">
-                      Enable discount by default
-                    </span>
-                  </span>
-                </label>
+              <div className="relative w-full sm:w-64">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9a94]" />
+                <input
+                  type="text"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Filter templates..."
+                  className="w-full h-9 pl-8.5 pr-3 text-xs rounded-xl border border-[#e5e5df] bg-white focus:outline-none focus:border-[#11110f]"
+                />
               </div>
             </div>
 
-            {/* Message + Button */}
-            <div className="flex flex-col gap-4 border-t border-[#eeeeea] pt-6 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-h-[20px]">
-                {message && (
-                  <p
-                    className={`text-xs font-medium ${
-                      message.includes("success")
-                        ? "text-[#58705b]"
-                        : "text-[#9a625c]"
-                    }`}
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredTemplates.map((t) => (
+                <div
+                  key={t._id}
+                  className="overflow-hidden rounded-2xl border border-[#e8e8e3] bg-white shadow-xs transition hover:shadow-md flex flex-col justify-between"
+                >
+                  <div className="relative aspect-[16/10] w-full bg-[#f5f5f2] overflow-hidden border-b border-[#f0f0ec]">
+                    <Image
+                      src={t.thumbnailUrl}
+                      alt={t.name}
+                      fill
+                      className="object-cover object-top"
+                    />
+                  </div>
+
+                  <div className="p-4">
+                    <h3 className="text-sm font-semibold text-[#141413] truncate">
+                      {t.name}
+                    </h3>
+                    <p className="text-[11px] text-[#8c8c87] mt-0.5">
+                      Created: {new Date(t.createdAt || Date.now()).toLocaleDateString()}
+                    </p>
+
+                    <div className="mt-4 flex items-center justify-between pt-3 border-t border-[#f0f0ec]">
+                      <Link
+                        href={`/templates/${t._id}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-[#11110f] hover:underline"
+                      >
+                        <span>Open Studio</span>
+                        <ExternalLink size={12} />
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => deleteTemplate(t._id)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 transition"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {filteredTemplates.length === 0 && (
+                <div className="col-span-full rounded-2xl border border-dashed border-[#d8d8d2] bg-white p-12 text-center">
+                  <p className="text-sm font-semibold text-[#141413]">No templates found</p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("upload")}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[#11110f] px-4 py-2 text-xs font-semibold text-white shadow-sm"
                   >
-                    {message}
+                    <Plus size={13} />
+                    <span>Upload First Template</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* TAB 2: CREATE TEMPLATE STUDIO */}
+        {activeTab === "upload" && (
+          <section className="rounded-2xl border border-[#e8e8e3] bg-white p-6 sm:p-8 shadow-xs">
+            <div className="mb-6 pb-4 border-b border-[#f0f0ec]">
+              <h2 className="text-lg font-semibold text-[#141413]">Publish New Invoice Template</h2>
+              <p className="text-xs text-[#8c8c87] mt-0.5">
+                Add HTML document structure with data-field interpolation tags and custom CSS.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Template Name */}
+              <div>
+                <label className="block text-xs font-semibold text-[#333330] mb-1.5">
+                  Template Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Minimal Agency Pro Invoice"
+                  className="saas-input"
+                />
+              </div>
+
+              {/* HTML & CSS Editors */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-[#333330]">
+                      HTML Layout
+                    </label>
+                    <span className="text-[10px] font-mono text-[#8c8c87] bg-[#f5f5f2] px-2 py-0.5 rounded">
+                      data-field tags
+                    </span>
+                  </div>
+                  <textarea
+                    required
+                    rows={12}
+                    value={html}
+                    onChange={(e) => setHtml(e.target.value)}
+                    placeholder='<div class="invoice-container">&#10;  <h1 data-field="company-name"></h1>&#10;  <div data-field="items-body">&#10;    <div data-field="item-row-template">&#10;      <span data-field="item-desc"></span>&#10;    </div>&#10;  </div>&#10;</div>'
+                    className="w-full resize-y rounded-xl border border-[#e5e5df] bg-[#fafaf8] p-3 font-mono text-xs text-[#1a1a19] focus:bg-white focus:border-[#11110f] focus:outline-none"
+                  />
+                  <p className="mt-1.5 text-[11px] text-[#8c8c87]">
+                    Supported tags: <code className="font-mono text-[#11110f]">company-name</code>, <code className="font-mono text-[#11110f]">from</code>, <code className="font-mono text-[#11110f]">bill-to</code>, <code className="font-mono text-[#11110f]">invoice-number</code>, <code className="font-mono text-[#11110f]">items-body</code>, <code className="font-mono text-[#11110f]">item-row-template</code>, <code className="font-mono text-[#11110f]">grand-total</code>.
                   </p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-[#333330]">
+                      CSS Stylesheet
+                    </label>
+                    <span className="text-[10px] font-mono text-[#8c8c87] bg-[#f5f5f2] px-2 py-0.5 rounded">
+                      Custom styling
+                    </span>
+                  </div>
+                  <textarea
+                    required
+                    rows={12}
+                    value={css}
+                    onChange={(e) => setCss(e.target.value)}
+                    placeholder=".invoice-container { max-width: 800px; margin: auto; font-family: sans-serif; }"
+                    className="w-full resize-y rounded-xl border border-[#e5e5df] bg-[#fafaf8] p-3 font-mono text-xs text-[#1a1a19] focus:bg-white focus:border-[#11110f] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Thumbnail Image */}
+              <div>
+                <label className="block text-xs font-semibold text-[#333330] mb-1.5">
+                  Template Thumbnail Preview
+                </label>
+                
+                {thumbnailPreview ? (
+                  <div className="flex items-center gap-4 rounded-xl border border-[#e8e8e3] p-3 bg-[#fafaf8]">
+                    <div className="relative h-20 w-16 overflow-hidden rounded-lg bg-white border">
+                      <Image
+                        src={thumbnailPreview}
+                        alt="Preview"
+                        fill
+                        className="object-cover object-top"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-[#141413]">{thumbnailFile?.name}</p>
+                      <p className="text-[11px] text-[#8c8c87]">Ready to upload to Cloudinary CDN</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setThumbnailFile(null);
+                        setThumbnailPreview("");
+                      }}
+                      className="text-xs text-red-600 hover:underline"
+                    >
+                      Change image
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#d8d8d2] bg-[#fafaf8] p-8 hover:bg-white transition text-center">
+                    <UploadCloud size={24} className="text-[#8c8c87] mb-2" />
+                    <span className="text-xs font-semibold text-[#141413]">
+                      Click to choose thumbnail screenshot
+                    </span>
+                    <span className="text-[11px] text-[#8c8c87] mt-0.5">
+                      PNG, JPG or WEBP (Recommended aspect ratio 3:4 or 4:5)
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileSelection(e.target.files?.[0])}
+                      className="hidden"
+                    />
+                  </label>
                 )}
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#222220] px-6 text-xs font-semibold text-white shadow-sm transition hover:bg-[#11110f] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? "Uploading..." : "Upload Template"}
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {/* =========================
-            EXISTING TEMPLATES
-        ========================== */}
-        <section id="library" className="pb-10">
-          <div className="mb-5 flex items-end justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#a0a09a]">
-                Library
-              </p>
-
-              <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#292927]">
-                Existing Templates
-              </h2>
-            </div>
-
-            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[#777771] shadow-sm ring-1 ring-[#eaeae5]">
-              {templates.length} templates
-            </span>
-          </div>
-
-          {/* 3 COLUMN GRID */}
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {templates.map((t) => (
-              <div
-                key={t._id}
-                className="group overflow-hidden rounded-2xl border border-[#e8e8e3] bg-white shadow-[0_5px_20px_rgba(0,0,0,0.025)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
-              >
-                {/* Image */}
-                <div className="relative overflow-hidden bg-[#f5f5f2]">
-                  <img
-                    src={t.thumbnailUrl}
-                    alt={t.name}
-                    className="aspect-[1.5/1] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-                  />
-
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/[0.08] to-transparent opacity-0 transition group-hover:opacity-100" />
-                </div>
-
-                {/* Details */}
-                <div className="flex items-center justify-between gap-3 p-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#343431]">
-                      {t.name}
-                    </p>
-
-                    <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#aaa9a3]">
-                      Invoice template
-                    </p>
-                  </div>
-
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f5f5f2] text-[#777771]">
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M9 18l6-6-6-6"
-                      />
-                    </svg>
-                  </div>
-                  <button onClick={() => deleteTemplate(t._id)} className="mx-4 mb-4 text-xs font-semibold text-[#9a625c] hover:underline">Delete template</button>
-                </div>
-              </div>
-            ))}
-
-            {templates.length === 0 && (
-              <div className="col-span-full rounded-2xl border border-dashed border-[#deded9] bg-white px-6 py-16 text-center">
-                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#f5f5f2]">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className="text-[#999993]"
-                  >
-                    <rect
-                      x="3"
-                      y="3"
-                      width="18"
-                      height="18"
-                      rx="2"
+              {/* Options */}
+              <div className="pt-4 border-t border-[#f0f0ec]">
+                <p className="text-xs font-semibold text-[#333330] mb-3">Template Options</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className="flex items-center gap-2.5 rounded-xl border border-[#e8e8e3] p-3 bg-[#fafaf8] cursor-pointer hover:bg-white transition">
+                    <input
+                      type="checkbox"
+                      checked={hasBackgroundImage}
+                      onChange={(e) => setHasBackgroundImage(e.target.checked)}
+                      className="h-4 w-4 rounded accent-[#11110f]"
                     />
-                    <path d="M8 14l2.5-2.5L13 14l2-2 3 3" />
-                  </svg>
+                    <span className="text-xs font-medium text-[#141413]">Background Image Support</span>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 rounded-xl border border-[#e8e8e3] p-3 bg-[#fafaf8] cursor-pointer hover:bg-white transition">
+                    <input
+                      type="checkbox"
+                      checked={defaultTaxEnabled}
+                      onChange={(e) => setDefaultTaxEnabled(e.target.checked)}
+                      className="h-4 w-4 rounded accent-[#11110f]"
+                    />
+                    <span className="text-xs font-medium text-[#141413]">Enable Tax by Default</span>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 rounded-xl border border-[#e8e8e3] p-3 bg-[#fafaf8] cursor-pointer hover:bg-white transition">
+                    <input
+                      type="checkbox"
+                      checked={defaultDiscountEnabled}
+                      onChange={(e) => setDefaultDiscountEnabled(e.target.checked)}
+                      className="h-4 w-4 rounded accent-[#11110f]"
+                    />
+                    <span className="text-xs font-medium text-[#141413]">Enable Discount by Default</span>
+                  </label>
                 </div>
-
-                <p className="mt-3 text-sm font-medium text-[#555550]">
-                  No templates yet
-                </p>
-
-                <p className="mt-1 text-xs text-[#a0a09a]">
-                  Upload your first invoice template above.
-                </p>
               </div>
-            )}
-          </div>
-        </section>
 
-        <section id="users" className="pb-12">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#a0a09a]">People</p>
-          <h2 className="mt-1 text-xl font-semibold text-[#292927]">Users</h2>
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-[#e8e8e3] bg-white">
-            {users.map((user) => <div key={user._id} className="flex min-w-[32rem] items-center justify-between gap-4 border-b border-[#eeeeea] px-4 py-3 last:border-0"><div><p className="text-sm font-semibold text-[#343431]">{user.name}</p><p className="text-xs text-[#8c8c87]">{user.email}</p></div><span className="text-xs text-[#777771]">{user.role}</span>{user.role === "user" && <button onClick={() => makeAdmin(user._id)} className="text-xs font-semibold text-[#343431] underline">Make admin</button>}</div>)}
-            {!users.length && <p className="p-5 text-sm text-[#8c8c87]">No users found.</p>}
-          </div>
-        </section>
+              <div className="flex justify-end pt-4 border-t border-[#f0f0ec]">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#11110f] px-6 py-3 text-xs font-semibold text-white shadow-sm hover:bg-[#252522] transition disabled:opacity-50"
+                >
+                  <Plus size={14} />
+                  <span>{loading ? "Publishing Template..." : "Publish Template to Platform"}</span>
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {/* TAB 3: USER MANAGEMENT */}
+        {activeTab === "users" && (
+          <section className="rounded-2xl border border-[#e8e8e3] bg-white shadow-xs overflow-hidden">
+            <div className="p-6 border-b border-[#f0f0ec]">
+              <h2 className="text-base font-semibold text-[#141413]">Registered Platform Users</h2>
+              <p className="text-xs text-[#8c8c87] mt-0.5">
+                Overview of user accounts and administrative roles
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#fafaf8] text-[#8c8c87] uppercase text-[10px] tracking-wider border-b border-[#f0f0ec]">
+                  <tr>
+                    <th className="px-6 py-3 font-semibold">User</th>
+                    <th className="px-6 py-3 font-semibold">Email</th>
+                    <th className="px-6 py-3 font-semibold">Role</th>
+                    <th className="px-6 py-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f0f0ec]">
+                  {users.map((user) => (
+                    <tr key={user._id} className="hover:bg-[#fafaf8] transition">
+                      <td className="px-6 py-4 font-semibold text-[#141413]">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#11110f] text-white text-[10px] font-bold">
+                            {(user.name || "U").charAt(0).toUpperCase()}
+                          </div>
+                          <span>{user.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-[#777771]">{user.email}</td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                            user.role === "admin"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-[#f5f5f2] text-[#666660]"
+                          }`}
+                        >
+                          {user.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {user.role !== "admin" && (
+                          <button
+                            type="button"
+                            onClick={() => makeAdmin(user._id)}
+                            className="font-semibold text-[#11110f] hover:underline"
+                          >
+                            Promote to Admin
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {users.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-[#8c8c87]">
+                        No user accounts registered yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
       </div>
-    </div>
+    </main>
   );
 }
